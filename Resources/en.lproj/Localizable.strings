@@ -1,0 +1,23 @@
+/* English menu texts. Keys are the English texts used in Sources/App/main.swift. */
+
+"Waiting for Accessibility access…" = "Waiting for Accessibility access…";
+"Open Settings › Accessibility" = "Open Settings › Accessibility";
+"AutoRaise is running too" = "AutoRaise is running too";
+"Quit AutoRaise" = "Quit AutoRaise";
+"Focus follows mouse" = "Focus follows mouse";
+"Mode" = "Mode";
+"Focus without raising" = "Focus without raising";
+"Focus and raise" = "Focus and raise";
+"Focus without raising is not available on this macOS" = "Focus without raising is not available on this macOS";
+"Delay" = "Delay";
+"Pause while typing" = "Pause while typing";
+"Off" = "Off";
+"Hold to pause" = "Hold to pause";
+"⌃ Control" = "⌃ Control";
+"⌥ Option" = "⌥ Option";
+"⌘ Command" = "⌘ Command";
+"None" = "None";
+"%d ms" = "%d ms";
+"%g s" = "%g s";
+"Open at login" = "Open at login";
+"Quit HocusFocus" = "Quit HocusFocus";
