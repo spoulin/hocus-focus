@@ -19,5 +19,9 @@
 "None" = "Aucune";
 "%d ms" = "%d ms";
 "%g s" = "%g s";
+"Apps" = "Apps";
+"All apps" = "Toutes les apps";
+"All apps except the ones checked below" = "Toutes, sauf les apps cochées ci-dessous";
+"Only the apps checked below" = "Seulement les apps cochées ci-dessous";
 "Open at login" = "Ouvrir au démarrage";
 "Quit HocusFocus" = "Quitter HocusFocus";

@@ -19,5 +19,9 @@
 "None" = "None";
 "%d ms" = "%d ms";
 "%g s" = "%g s";
+"Apps" = "Apps";
+"All apps" = "All apps";
+"All apps except the ones checked below" = "All apps except the ones checked below";
+"Only the apps checked below" = "Only the apps checked below";
 "Open at login" = "Open at login";
 "Quit HocusFocus" = "Quit HocusFocus";

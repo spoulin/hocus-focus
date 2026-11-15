@@ -50,7 +50,8 @@ public enum Windows {
     }
 
     public enum Hit {
-        case window(WindowInfo, AXUIElement)
+        /// The Accessibility element is nil when the app does not expose that window.
+        case window(WindowInfo, AXUIElement?)
         case skip(String)
     }
 
@@ -84,9 +85,12 @@ public enum Windows {
             return .skip("Dock")
         }
 
-        // Walk up from the element under the mouse to its window.
+        // Walk up from the element under the mouse to its window. A menu item sits right
+        // under its menu, so the first levels are checked for menus before jumping
+        // straight to the window: in web content (Electron apps such as Claude), the
+        // element can be more than 50 levels deep.
         var current: AXUIElement? = element
-        for _ in 0..<30 {
+        for depth in 0..<200 {
             guard let node = current else { break }
             let role = string(node, kAXRoleAttribute) ?? ""
             if menuRoles.contains(role) { return .skip("menu (\(role))") }
@@ -98,21 +102,26 @@ public enum Windows {
                 guard info.layer == 0 else { return .skip("not a normal window: \(info.description)") }
                 return .window(info, node)
             }
-            current = parent(of: node)
+            if depth == 1, let window = self.element(node, kAXWindowAttribute) {
+                current = window
+            } else {
+                current = parent(of: node)
+            }
         }
         return fallbackHit(at: point, in: windows)
     }
 
-    /// When Accessibility gives no window: the WindowServer's list, top to bottom.
+    /// When Accessibility gives no window: the WindowServer's list, top to bottom, with
+    /// only the windows of normal apps. Overlays such as the borders of JankyBorders
+    /// belong to background apps and let the mouse through.
     private static func fallbackHit(at point: CGPoint, in windows: [WindowInfo]) -> Hit {
-        guard let top = topmost(at: point, in: windows.filter { $0.owner != "Dock" }) else {
+        let regular = windows.filter {
+            $0.layer == 0 && NSRunningApplication(processIdentifier: $0.pid)?.activationPolicy == .regular
+        }
+        guard let top = topmost(at: point, in: regular) else {
             return .skip("no window under the mouse")
         }
-        guard top.layer == 0 else { return .skip("not a normal window: \(top.description)") }
-        guard let ax = axWindow(id: top.id, pid: top.pid) else {
-            return .skip("no accessibility window for \(top.description)")
-        }
-        return .window(top, ax)
+        return .window(top, axWindow(id: top.id, pid: top.pid))
     }
 
     private static func parent(of element: AXUIElement) -> AXUIElement? {
@@ -139,15 +148,94 @@ public enum Windows {
 
     /// The window that has the keyboard focus right now, and its app.
     ///
-    /// Asks Accessibility, not NSWorkspace.frontmostApplication: NSWorkspace only
-    /// updates that value while the main run loop turns, so it can be stale.
+    /// The active app comes from the WindowServer (SkyLight). Asking Accessibility
+    /// (kAXFocusedApplicationAttribute) often fails with error -25204, "cannot
+    /// complete"; it stays as a second way, then NSWorkspace. The focused window is
+    /// then asked to that app.
     public static func focused() -> (id: CGWindowID, pid: pid_t)? {
-        guard let axApp = element(AXUIElementCreateSystemWide(), kAXFocusedApplicationAttribute),
-              let window = element(axApp, kAXFocusedWindowAttribute),
+        var pid = Private.frontmostPID()
+        if pid == nil, let axApp = element(systemWide, kAXFocusedApplicationAttribute) {
+            var axPID: pid_t = 0
+            if AXUIElementGetPid(axApp, &axPID) == .success { pid = axPID }
+        }
+        if pid == nil { pid = NSWorkspace.shared.frontmostApplication?.processIdentifier }
+        guard let pid else { return nil }
+
+        let axApp = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(axApp, 0.25)
+        guard let window = element(axApp, kAXFocusedWindowAttribute) ?? element(axApp, kAXMainWindowAttribute),
               let id = Private.windowID(of: window) else { return nil }
-        var pid: pid_t = 0
-        AXUIElementGetPid(axApp, &pid)
         return (id, pid)
+    }
+
+    private static let popupSubroles: Set<String> = [kAXDialogSubrole, kAXSystemDialogSubrole, "AXSheet"]
+
+    public struct Popup {
+        public let window: WindowInfo
+        /// True for menus, popovers and modal panels: the focus must not move at all, or
+        /// the menu would close. False for dialogs, sheets and secondary windows: only
+        /// the other windows of the same app are kept from taking the focus.
+        public let blocksAll: Bool
+    }
+
+    /// The popup the app shows in front of its focused window, if any: a menu, popover,
+    /// modal panel, dialog or sheet of that same app. The focused window itself counts:
+    /// while a dialog is open, it is often the focused window. A focused secondary
+    /// window (settings, about, inspector) counts too, see `isSecondary`.
+    ///
+    /// Not counted: floating "always on top" windows and palettes (layers 3 and 19),
+    /// and other standard windows of the app, which focus without raise often leaves in
+    /// front of the focused one.
+    public static func popup(over focused: (id: CGWindowID, pid: pid_t), in windows: [WindowInfo] = onScreen()) -> Popup? {
+        guard let index = windows.firstIndex(where: { $0.id == focused.id }) else { return nil }
+        let menuLevel = Int(CGWindowLevelForKey(.popUpMenuWindow))
+        let modalLevel = Int(CGWindowLevelForKey(.modalPanelWindow))
+        let cursorLevel = Int(CGWindowLevelForKey(.cursorWindow))
+        for window in windows[...index] where window.pid == focused.pid {
+            switch window.layer {
+            case menuLevel..<cursorLevel, modalLevel:
+                return Popup(window: window, blocksAll: true)
+            case 0:
+                // Hidden from Accessibility: most likely a popover or another transient.
+                guard let ax = axWindow(id: window.id, pid: window.pid) else { return Popup(window: window, blocksAll: true) }
+                if popupSubroles.contains(string(ax, kAXSubroleAttribute) ?? "")
+                    || (window.id == focused.id && isSecondary(ax)) {
+                    return Popup(window: window, blocksAll: false)
+                }
+            default:
+                continue
+            }
+        }
+        return nil
+    }
+
+    /// A secondary window: its minimize and zoom buttons are both disabled or missing.
+    /// Settings, about and inspector windows are like that (RandAmp's settings, for
+    /// example); main windows can be minimized. While such a window has the focus, the
+    /// mouse often has to cross the app's main window to reach it.
+    public static func isSecondary(_ window: AXUIElement) -> Bool {
+        !buttonEnabled(window, kAXMinimizeButtonAttribute) && !buttonEnabled(window, kAXZoomButtonAttribute)
+    }
+
+    /// The app's own focused window when it is a popup-like window: a dialog, a sheet
+    /// or a secondary window (settings...). An app that is not active keeps its focused
+    /// window, so when the mouse comes back to the app, that window can get the focus
+    /// again instead of the one under the mouse.
+    public static func pendingPopup(ofApp pid: pid_t, in windows: [WindowInfo] = onScreen()) -> (WindowInfo, AXUIElement)? {
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.25)
+        guard let window = element(app, kAXFocusedWindowAttribute),
+              let id = Private.windowID(of: window),
+              let info = windows.first(where: { $0.id == id && $0.layer == 0 }) else { return nil }
+        let isPopup = popupSubroles.contains(string(window, kAXSubroleAttribute) ?? "") || isSecondary(window)
+        return isPopup ? (info, window) : nil
+    }
+
+    private static func buttonEnabled(_ window: AXUIElement, _ attribute: String) -> Bool {
+        guard let button = element(window, attribute) else { return false }
+        var value: CFTypeRef?
+        AXUIElementCopyAttributeValue(button, kAXEnabledAttribute as CFString, &value)
+        return (value as? Bool) ?? false
     }
 
     private static func element(_ parent: AXUIElement, _ attribute: String) -> AXUIElement? {

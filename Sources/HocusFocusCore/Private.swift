@@ -13,6 +13,9 @@ public enum Private {
     typealias GetWindowOwner = @convention(c) (Int32, UInt32, UnsafeMutablePointer<Int32>) -> CGError
     typealias GetConnectionPSN = @convention(c) (Int32, UnsafeMutablePointer<ProcessSerialNumber>) -> CGError
     typealias AXGetWindow = @convention(c) (AXUIElement, UnsafeMutablePointer<CGWindowID>) -> AXError
+    typealias GetFrontProcess = @convention(c) (UnsafeMutablePointer<ProcessSerialNumber>) -> CGError
+    typealias GetConnectionIDForPSN = @convention(c) (Int32, UnsafeMutablePointer<ProcessSerialNumber>, UnsafeMutablePointer<Int32>) -> CGError
+    typealias ConnectionGetPID = @convention(c) (Int32, UnsafeMutablePointer<pid_t>) -> CGError
 
     private static let skyLight = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY)
     private static let appServices = dlopen("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices", RTLD_LAZY)
@@ -28,6 +31,9 @@ public enum Private {
     static let getWindowOwner = load(skyLight, "SLSGetWindowOwner", as: GetWindowOwner.self)
     static let getConnectionPSN = load(skyLight, "SLSGetConnectionPSN", as: GetConnectionPSN.self)
     static let axGetWindow = load(appServices, "_AXUIElementGetWindow", as: AXGetWindow.self)
+    static let getFrontProcess = load(skyLight, "_SLPSGetFrontProcess", as: GetFrontProcess.self)
+    static let getConnectionIDForPSN = load(skyLight, "SLSGetConnectionIDForPSN", as: GetConnectionIDForPSN.self)
+    static let connectionGetPID = load(skyLight, "SLSConnectionGetPID", as: ConnectionGetPID.self)
 
     /// True when every symbol needed for focus without raise was found.
     public static var focusWithoutRaiseAvailable: Bool {
@@ -43,7 +49,24 @@ public enum Private {
             ("SLSGetWindowOwner", getWindowOwner != nil),
             ("SLSGetConnectionPSN", getConnectionPSN != nil),
             ("_AXUIElementGetWindow", axGetWindow != nil),
+            ("_SLPSGetFrontProcess", getFrontProcess != nil),
+            ("SLSGetConnectionIDForPSN", getConnectionIDForPSN != nil),
+            ("SLSConnectionGetPID", connectionGetPID != nil),
         ]
+    }
+
+    /// The process of the active app, as the WindowServer knows it. Unlike the
+    /// Accessibility question (kAXFocusedApplicationAttribute), it asks no app, so it
+    /// does not fail when an app is slow to answer.
+    static func frontmostPID() -> pid_t? {
+        guard let getFrontProcess, let getConnectionIDForPSN, let connectionGetPID, let mainConnectionID else { return nil }
+        var psn = ProcessSerialNumber()
+        guard getFrontProcess(&psn) == .success else { return nil }
+        var connection: Int32 = 0
+        guard getConnectionIDForPSN(mainConnectionID(), &psn, &connection) == .success else { return nil }
+        var pid: pid_t = 0
+        guard connectionGetPID(connection, &pid) == .success, pid > 0 else { return nil }
+        return pid
     }
 
     /// The process serial number of the process that owns a window, found from the

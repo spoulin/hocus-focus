@@ -24,6 +24,11 @@ enum Preferences {
         if let raw = defaults.string(forKey: "disableKey"), let key = Settings.DisableKey(rawValue: raw) {
             settings.disableKey = key
         }
+        if let raw = defaults.string(forKey: "appFilter"), let filter = Settings.AppFilter(rawValue: raw) {
+            settings.appFilter = filter
+        }
+        settings.exceptApps = Set(defaults.stringArray(forKey: "exceptApps") ?? [])
+        settings.onlyApps = Set(defaults.stringArray(forKey: "onlyApps") ?? [])
         return settings
     }
 
@@ -33,6 +38,9 @@ enum Preferences {
         defaults.set(settings.dwell * 1000, forKey: "dwellMs")
         defaults.set(settings.typingGuard * 1000, forKey: "typingGuardMs")
         defaults.set(settings.disableKey.rawValue, forKey: "disableKey")
+        defaults.set(settings.appFilter.rawValue, forKey: "appFilter")
+        defaults.set(settings.exceptApps.sorted(), forKey: "exceptApps")
+        defaults.set(settings.onlyApps.sorted(), forKey: "onlyApps")
     }
 
     /// `defaults write local.hocusfocus log -bool YES` writes each decision to
@@ -161,6 +169,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             choice(title, #selector(chooseDisableKey(_:)), key.rawValue, checked: settings.disableKey == key)
         }))
 
+        menu.addItem(appsSubmenu())
+
         menu.addItem(.separator())
         let loginEnabled = SMAppService.mainApp.status == .enabled
         menu.addItem(item(localized("Open at login"), #selector(toggleLaunchAtLogin), checked: loginEnabled))
@@ -195,6 +205,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         items.forEach(menu.addItem)
         entry.submenu = menu
         return entry
+    }
+
+    /// The filter mode, then, in the two list modes, the open apps (and the listed apps
+    /// that are not open) to check or uncheck.
+    private func appsSubmenu() -> NSMenuItem {
+        let filters: [(String, Settings.AppFilter)] = [
+            (localized("All apps"), .all),
+            (localized("All apps except the ones checked below"), .except),
+            (localized("Only the apps checked below"), .only),
+        ]
+        var items = filters.map { title, filter in
+            choice(title, #selector(chooseAppFilter(_:)), filter.rawValue, checked: settings.appFilter == filter)
+        }
+        guard settings.appFilter != .all else { return submenu(localized("Apps"), items) }
+
+        let listed = settings.appFilter == .except ? settings.exceptApps : settings.onlyApps
+        var apps: [String: (name: String, icon: NSImage?)] = [:]
+        for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
+            guard let id = app.bundleIdentifier, id != Bundle.main.bundleIdentifier else { continue }
+            apps[id] = (app.localizedName ?? id, app.icon)
+        }
+        for id in listed where apps[id] == nil {
+            if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
+                let name = FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+                apps[id] = (name, NSWorkspace.shared.icon(forFile: url.path))
+            } else {
+                apps[id] = (id, nil)
+            }
+        }
+
+        items.append(.separator())
+        let sorted = apps.sorted { $0.value.name.localizedCaseInsensitiveCompare($1.value.name) == .orderedAscending }
+        for (id, app) in sorted {
+            let entry = choice(app.name, #selector(toggleApp(_:)), id, checked: listed.contains(id))
+            if let icon = app.icon?.copy() as? NSImage {
+                icon.size = NSSize(width: 16, height: 16)
+                entry.image = icon
+            }
+            items.append(entry)
+        }
+        return submenu(localized("Apps"), items)
     }
 
     private func milliseconds(_ ms: Int) -> String {
@@ -234,6 +285,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             settings.disableKey = key
             apply()
         }
+    }
+
+    @objc private func chooseAppFilter(_ sender: NSMenuItem) {
+        if let raw = sender.representedObject as? String, let filter = Settings.AppFilter(rawValue: raw) {
+            settings.appFilter = filter
+            apply()
+        }
+    }
+
+    /// Adds the app to the list of the current mode, or removes it.
+    @objc private func toggleApp(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        switch settings.appFilter {
+        case .except:
+            if settings.exceptApps.remove(id) == nil { settings.exceptApps.insert(id) }
+        case .only:
+            if settings.onlyApps.remove(id) == nil { settings.onlyApps.insert(id) }
+        case .all:
+            return
+        }
+        apply()
     }
 
     @objc private func toggleLaunchAtLogin() {

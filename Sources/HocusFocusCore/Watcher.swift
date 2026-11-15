@@ -27,6 +27,23 @@ public struct Settings: Equatable {
     /// Holding this key pauses the focus changes.
     public var disableKey: DisableKey = .control
 
+    /// Which apps can get the focus: all of them, all except a list, or only a list.
+    public enum AppFilter: String, CaseIterable { case all, except, only }
+    public var appFilter: AppFilter = .all
+    /// Bundle identifiers that never get the focus, in the `except` mode.
+    public var exceptApps: Set<String> = []
+    /// Bundle identifiers that alone get the focus, in the `only` mode.
+    public var onlyApps: Set<String> = []
+
+    /// True when the app with this bundle identifier can get the focus.
+    public func allows(_ bundleID: String?) -> Bool {
+        switch appFilter {
+        case .all: true
+        case .except: !exceptApps.contains(bundleID ?? "")
+        case .only: onlyApps.contains(bundleID ?? "")
+        }
+    }
+
     public init() {}
 }
 
@@ -117,33 +134,67 @@ public final class Watcher {
         if Date().timeIntervalSince(lastKeyDown) < settings.typingGuard { return write("skip: typing") }
 
         let current = Windows.focused()
+        let windows = Windows.onScreen()
 
-        // The focused app has a pop-up or context menu open: leave the focus where it is.
-        // Only that app's windows count: other apps (AutoJankyBorders, Solpaper...) keep
-        // windows at the pop-up menu level that are not menus.
-        let menuLevel = Int(CGWindowLevelForKey(.popUpMenuWindow))
-        if let current, Windows.onScreen().contains(where: { $0.layer == menuLevel && $0.pid == current.pid }) {
-            return write("skip: a menu is open")
+        // The focused app shows a menu, popover, sheet, dialog or panel in front of its
+        // window: leave the focus where it is. Only that app's windows count: other apps
+        // (AutoJankyBorders, Solpaper...) keep windows above that are not popups.
+        let popup = current.flatMap { Windows.popup(over: $0, in: windows) }
+        if let popup, popup.blocksAll {
+            return write("skip: menu open: \(popup.window.description)")
         }
 
         // Menu bar, Dock, notifications, menus: anything that is not a normal window.
-        let target: WindowInfo, axTarget: AXUIElement
+        var target: WindowInfo, axTarget: AXUIElement?
         switch Windows.hit(at: point) {
         case .skip(let reason): return write("skip: \(reason)")
         case .window(let info, let ax): (target, axTarget) = (info, ax)
         }
 
+        // Coming back to an app that left a popup-like window focused (its settings, a
+        // dialog): give the focus back to that window, not to the one under the mouse,
+        // so the popup is not hidden behind the app's main window.
+        // A dialog, sheet or secondary window (settings) has the focus: the other windows
+        // of that app don't take it, since the mouse often crosses the main window to
+        // reach the popup. Other apps can take it; coming back gives it to the popup again.
+        if let popup, target.pid == popup.window.pid, target.id != popup.window.id {
+            return write("skip: popup open in the same app: \(popup.window.description)")
+        }
+
+        var raisePopup = false
+        if target.pid != current?.pid, let (popup, ax) = Windows.pendingPopup(ofApp: target.pid, in: windows),
+           popup.id != target.id {
+            write("back to the app's popup: \(popup.description) instead of #\(target.id)")
+            (target, axTarget) = (popup, ax)
+            raisePopup = true
+        }
+
         if current?.id == target.id { return write("already focused: \(target.description)") }
 
-        let subrole = Windows.string(axTarget, kAXSubroleAttribute) ?? "?"
-        guard subrole == kAXStandardWindowSubrole || subrole == kAXDialogSubrole else {
-            return write("skip: subrole \(subrole) for \(target.description)")
+        let bundleID = NSRunningApplication(processIdentifier: target.pid)?.bundleIdentifier
+        guard settings.allows(bundleID) else {
+            return write("skip: \(bundleID ?? target.owner) is filtered out (\(settings.appFilter.rawValue))")
+        }
+
+        // Without an Accessibility element (some apps hide their windows from it), the
+        // window is taken as a standard one.
+        if let axTarget {
+            let subrole = Windows.string(axTarget, kAXSubroleAttribute) ?? "?"
+            guard subrole == kAXStandardWindowSubrole || subrole == kAXDialogSubrole else {
+                return write("skip: subrole \(subrole) for \(target.description)")
+            }
         }
 
         if settings.mode == .focus && Private.focusWithoutRaiseAvailable {
             let done = Focus.withoutRaise(target: target.id, current: current?.id)
             write("focus \(done ? "ok" : "FAILED"): \(target.description)")
+            // The popup the user was in may be hidden behind another app: bring it up.
+            // The app is active now, so the raise works.
+            if done, raisePopup, let axTarget {
+                AXUIElementPerformAction(axTarget, kAXRaiseAction as CFString)
+            }
         } else {
+            guard let axTarget else { return write("skip: cannot raise without accessibility: \(target.description)") }
             let done = Focus.raise(axTarget, pid: target.pid)
             write("raise \(done ? "ok" : "FAILED"): \(target.description)")
         }

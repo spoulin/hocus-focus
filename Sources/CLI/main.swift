@@ -15,6 +15,8 @@ run options:
   --dwell <ms>          How long the mouse must rest (default 150)
   --typing-guard <ms>   No change if a key was pressed this recently (default 500)
   --disable-key control|option|command|none   Hold to pause (default control)
+  --except <id,id>      Never focus these apps (bundle identifiers)
+  --only <id,id>        Focus only these apps (bundle identifiers)
   --verbose             Log every decision
 """
 
@@ -28,6 +30,12 @@ func requireAccessibility() {
     if !AXIsProcessTrustedWithOptions(options) {
         fail("Accessibility access is missing. Allow this app (or your terminal) in System Settings > Privacy & Security > Accessibility, then run again.")
     }
+}
+
+/// Turns the main run loop for a while: runs the scheduled checks and lets NSWorkspace
+/// learn which app is active.
+func settle(_ seconds: TimeInterval) {
+    RunLoop.main.run(until: Date() + seconds)
 }
 
 func normalWindows() -> [WindowInfo] {
@@ -49,9 +57,18 @@ case "check":
 
 case "list":
     requireAccessibility()
-    let focused = Windows.focused()?.id
+    settle(0.05)
+    let focused = Windows.focused()
     for window in normalWindows() {
-        print("\(window.id == focused ? "*" : " ") \(window.description)")
+        print("\(window.id == focused?.id ? "*" : " ") \(window.description)")
+    }
+    if let focused {
+        if let popup = Windows.popup(over: focused) {
+            let effect = popup.blocksAll ? "no focus change at all" : "no focus change inside the app"
+            print("popup over the focused window: \(popup.window.description) (\(effect))")
+        } else {
+            print("popup over the focused window: none")
+        }
     }
 
 case "hit":
@@ -67,12 +84,13 @@ case "test-focus":
     guard let raw = arguments.first, let target = CGWindowID(raw) else { fail(usage) }
     guard normalWindows().contains(where: { $0.id == target }) else { fail("No normal window #\(target) on screen.") }
 
+    settle(0.05)
     let orderBefore = normalWindows().map(\.id)
     let focusBefore = Windows.focused()
     print("before: focus #\(focusBefore.map { String($0.id) } ?? "none"), order \(orderBefore)")
 
     guard Focus.withoutRaise(target: target, current: focusBefore?.id) else { fail("Focus without raise failed.") }
-    usleep(400_000)
+    settle(0.4)
 
     let orderAfter = normalWindows().map(\.id)
     let focusAfter = Windows.focused()
@@ -109,6 +127,12 @@ case "run":
                 fail("--disable-key must be control, option, command or none")
             }
             settings.disableKey = key
+        case "--except":
+            settings.appFilter = .except
+            settings.exceptApps = Set(value().split(separator: ",").map { String($0) })
+        case "--only":
+            settings.appFilter = .only
+            settings.onlyApps = Set(value().split(separator: ",").map { String($0) })
         case "--verbose":
             verbose = true
         default:
