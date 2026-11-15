@@ -4,6 +4,8 @@
 
 # HocusFocus
 
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/stephanepoulin)
+
 [![Download HocusFocus for macOS](https://img.shields.io/badge/Download-HocusFocus%20for%20macOS-2E34A7?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/spoulin/hocus-focus/releases/latest/download/HocusFocus.dmg)
 
 For macOS 13 or later, on Apple silicon and Intel Macs. See [Install](#install).
@@ -235,3 +237,11 @@ Lessons learned while testing:
 
 MIT, see [LICENSE](LICENSE). The layout of the private event records comes from
 [yabai](https://github.com/koekeishiya/yabai), also under the MIT license.
+
+## Support
+
+If HocusFocus saves you a click (or a few hundred a day), you can buy me a coffee.
+
+<a href="https://buymeacoffee.com/stephanepoulin"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="40"></a>
+
+Made by [Stéphane Poulin](https://www.stephanepoulin.com).
