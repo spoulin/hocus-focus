@@ -141,3 +141,8 @@ Lessons learned while testing:
 - Floating windows and panels are skipped.
 - Popovers are not detected yet. Only pop-up and context menus are.
 - No per-app rules, no visual cue for the window about to get the focus, no app icon.
+
+## License
+
+MIT, see [LICENSE](LICENSE). The layout of the private event records comes from
+[yabai](https://github.com/koekeishiya/yabai), also under the MIT license.
