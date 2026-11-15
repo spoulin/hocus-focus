@@ -29,9 +29,13 @@ diagnostics.
    doesn't come from the App Store or from a developer known to Apple. Click **Done**, not
    Move to Trash.
 
+   <img src="Resources/install-not-opened.png" width="260" alt="macOS: HocusFocus.app Not Opened, with Move to Trash and Done">
+
 4. Open **System Settings › Privacy & Security**, scroll down to **Security**, and click
    **Open Anyway** next to the message about HocusFocus. Confirm with your password or Touch ID,
    then click **Open Anyway** once more.
+
+   <img src="Resources/install-open-anyway.png" width="440" alt="System Settings, Privacy & Security: HocusFocus.app was blocked to protect your Mac, Open Anyway">
 
 5. HocusFocus asks for Accessibility access, which it needs to follow the mouse and give the
    focus to a window: allow it in **System Settings › Privacy & Security › Accessibility**. It
