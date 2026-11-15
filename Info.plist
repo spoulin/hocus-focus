@@ -4,16 +4,18 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>HocusFocus</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>local.hocusfocus</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en</string>
 		<string>fr</string>
 	</array>
-	<key>CFBundleIdentifier</key>
-	<string>local.hocusfocus</string>
 	<key>CFBundleName</key>
-	<string>HocusFocus</string>
-	<key>CFBundleExecutable</key>
 	<string>HocusFocus</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>

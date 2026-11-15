@@ -1,5 +1,7 @@
 # HocusFocus
 
+<img src="Icon/AppIcon.png" width="128" alt="HocusFocus icon">
+
 Focus follows the mouse on macOS, **without raising the window**. Rest the mouse on a
 window, and it gets the keyboard focus. It stays where it is in the stack of windows.
 
