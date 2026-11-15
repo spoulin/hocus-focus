@@ -212,8 +212,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func appsSubmenu() -> NSMenuItem {
         let filters: [(String, Settings.AppFilter)] = [
             (localized("All apps"), .all),
-            (localized("All apps except the ones checked below"), .except),
-            (localized("Only the apps checked below"), .only),
+            (localized("Ignore the checked apps"), .except),
+            (localized("Only the checked apps"), .only),
         ]
         var items = filters.map { title, filter in
             choice(title, #selector(chooseAppFilter(_:)), filter.rawValue, checked: settings.appFilter == filter)

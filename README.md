@@ -29,7 +29,7 @@ The menu (English and French):
 | Delay | How long the mouse must rest: 50 to 600 ms (150). |
 | Pause while typing | No focus change for 300 ms, 500 ms (default) or 1 s after a key press, or off. |
 | Hold to pause | Control (default), Option, Command or none. |
-| Apps | All apps (default), all apps except the ones checked, or only the ones checked. The open apps are listed with a checkbox; each mode keeps its own list. |
+| Apps | All apps (default); Ignore the checked apps (they never get the focus); or Only the checked apps (no other app gets it). The open apps are listed with a checkbox; each mode keeps its own list. |
 | Open at login | Starts HocusFocus when you log in. |
 | Quit AutoRaise | Shown only when AutoRaise is running: both tools react to the mouse. |
 

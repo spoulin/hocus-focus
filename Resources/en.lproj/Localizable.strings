@@ -21,7 +21,7 @@
 "%g s" = "%g s";
 "Apps" = "Apps";
 "All apps" = "All apps";
-"All apps except the ones checked below" = "All apps except the ones checked below";
-"Only the apps checked below" = "Only the apps checked below";
+"Ignore the checked apps" = "Ignore the checked apps";
+"Only the checked apps" = "Only the checked apps";
 "Open at login" = "Open at login";
 "Quit HocusFocus" = "Quit HocusFocus";
