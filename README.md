@@ -153,6 +153,10 @@ Lessons learned while testing:
 - Accessibility often cannot tell which app is active (error -25204, 20 times out of 20
   while RandAmp's settings had the focus). The active app comes from the WindowServer
   instead (`_SLPSGetFrontProcess`, as yabai does), then its focused window from that app.
+- While the screen is recorded, macOS 26 puts a 66 × 20 point window on every title bar
+  (its recording indicator), which the app reports as a dialog. HocusFocus took it for an open
+  dialog and kept the focus from moving inside the app. Windows smaller than 120 × 60 points are
+  now ignored, as popups and as targets.
 - RandAmp's settings window is a standard window for macOS, not a popup. Its disabled
   minimize and zoom buttons tell it apart from the main window.
 - Claude raises its own window most times it becomes active. Focus without raise cannot

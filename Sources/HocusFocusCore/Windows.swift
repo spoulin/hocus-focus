@@ -10,6 +10,10 @@ public struct WindowInfo {
     public let owner: String
     public let title: String
 
+    /// Too small to be a real window. While the screen is recorded, macOS 26 puts a 66 × 20 point
+    /// window on each title bar (its recording indicator), which the app reports as a dialog.
+    public var isTiny: Bool { bounds.width < 120 && bounds.height < 60 }
+
     public var description: String {
         let name = title.isEmpty ? owner : "\(owner) — \(title)"
         return "#\(id) pid \(pid) layer \(layer) \(name)"
@@ -100,6 +104,7 @@ public enum Windows {
                     return .skip("window #\(id) is not in the on-screen list")
                 }
                 guard info.layer == 0 else { return .skip("not a normal window: \(info.description)") }
+                guard !info.isTiny else { return .skip("tiny window (recording indicator?): \(info.description)") }
                 return .window(info, node)
             }
             if depth == 1, let window = self.element(node, kAXWindowAttribute) {
@@ -196,6 +201,8 @@ public enum Windows {
             case menuLevel..<cursorLevel, modalLevel:
                 return Popup(window: window, blocksAll: true)
             case 0:
+                // macOS's recording indicators are tiny "dialogs" in front of every window.
+                if window.isTiny { continue }
                 // Hidden from Accessibility: most likely a popover or another transient.
                 guard let ax = axWindow(id: window.id, pid: window.pid) else { return Popup(window: window, blocksAll: true) }
                 if popupSubroles.contains(string(ax, kAXSubroleAttribute) ?? "")
@@ -226,7 +233,7 @@ public enum Windows {
         AXUIElementSetMessagingTimeout(app, 0.25)
         guard let window = element(app, kAXFocusedWindowAttribute),
               let id = Private.windowID(of: window),
-              let info = windows.first(where: { $0.id == id && $0.layer == 0 }) else { return nil }
+              let info = windows.first(where: { $0.id == id && $0.layer == 0 && !$0.isTiny }) else { return nil }
         let isPopup = popupSubroles.contains(string(window, kAXSubroleAttribute) ?? "") || isSecondary(window)
         return isPopup ? (info, window) : nil
     }
