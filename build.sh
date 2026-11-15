@@ -21,8 +21,16 @@ APP="build/HocusFocus.app"
 DEST="$HOME/Applications/HocusFocus.app"
 
 if [[ -n "${UNIVERSAL:-}" ]]; then
-	swift build -c release --product HocusFocusApp --arch arm64 --arch x86_64
-	BINARY=".build/apple/Products/Release/HocusFocusApp"
+	# One build per architecture, joined with lipo: a Swift 6 package can fail on GitHub's Xcode
+	# with `swift build --arch arm64 --arch x86_64` (seen with Talk to me Bro).
+	parts=()
+	for arch in arm64 x86_64; do
+		swift build -c release --product HocusFocusApp --arch "$arch"
+		parts+=("$(swift build -c release --arch "$arch" --show-bin-path)/HocusFocusApp")
+	done
+	mkdir -p build
+	BINARY="build/HocusFocusApp-universal"
+	lipo -create -output "$BINARY" "${parts[@]}"
 else
 	swift build -c release --product HocusFocusApp
 	BINARY="$(swift build -c release --show-bin-path)/HocusFocusApp"

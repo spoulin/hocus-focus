@@ -177,6 +177,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
         menu.addItem(disabledItem("HocusFocus \(version)"))
+        // Releases are on GitHub, made by the Release workflow from a version tag. The app isn't
+        // notarized, so it doesn't update itself.
+        menu.addItem(item(localized("Check for Updates…"), #selector(checkForUpdates)))
         menu.addItem(item(localized("Quit HocusFocus"), #selector(quit), key: "q"))
     }
 
@@ -329,6 +332,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openAccessibility() {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
         NSWorkspace.shared.open(url)
+    }
+
+    @objc private func checkForUpdates() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/spoulin/hocus-focus/releases/latest")!)
     }
 
     @objc private func quit() {

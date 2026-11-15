@@ -1,14 +1,48 @@
+<p align="center">
+  <img src="Icon/AppIcon.png" width="200" alt="HocusFocus icon: the window behind has the focus, with a gold glow, and the mouse cursor rests on it">
+</p>
+
 # HocusFocus
 
-<img src="Icon/AppIcon.png" width="128" alt="HocusFocus icon">
+[![Download HocusFocus for macOS](https://img.shields.io/badge/Download-HocusFocus%20for%20macOS-2E34A7?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/spoulin/hocus-focus/releases/latest/download/HocusFocus.dmg)
+
+For macOS 13 or later, on Apple silicon and Intel Macs. See [Install](#install).
 
 Focus follows the mouse on macOS, **without raising the window**. Rest the mouse on a
 window, and it gets the keyboard focus. It stays where it is in the stack of windows.
 
+[Watch the demo on YouTube](https://youtu.be/bklzxefGLa4) (under 2 minutes).
+
 HocusFocus is a menu bar app. A command line tool, `hocusfocus`, is kept for tests and
 diagnostics.
 
-## The app
+## Install
+
+1. Click **Download** above to get `HocusFocus.dmg`, then open it.
+2. Drag HocusFocus onto Applications.
+
+   <img src="Resources/install-dmg.png" width="440" alt="The HocusFocus disk image: drag HocusFocus onto Applications">
+
+3. Open HocusFocus from Applications. The first time, macOS says it can't check it, because it
+   doesn't come from the App Store or from a developer known to Apple. Click **Done**, not
+   Move to Trash.
+
+4. Open **System Settings › Privacy & Security**, scroll down to **Security**, and click
+   **Open Anyway** next to the message about HocusFocus. Confirm with your password or Touch ID,
+   then click **Open Anyway** once more.
+
+5. HocusFocus asks for Accessibility access, which it needs to follow the mouse and give the
+   focus to a window: allow it in **System Settings › Privacy & Security › Accessibility**. It
+   starts by itself as soon as the access is given.
+
+Steps 3 and 4 are needed once only. Clicked Move to Trash by mistake? Open the disk image again,
+drag the app onto Applications, and start over at step 3.
+
+To update, choose **Check for Updates…** in the menu bar menu: it opens the page of the latest
+version. Download it and drag it onto Applications again, replacing the old one. Every release is
+signed with the same certificate, so the Accessibility access stays.
+
+## Build and install
 
 ```bash
 ./build.sh
@@ -34,6 +68,7 @@ The menu (English and French):
 | Apps | All apps (default); Ignore the checked apps (they never get the focus); or Only the checked apps (no other app gets it). The open apps are listed with a checkbox; each mode keeps its own list. |
 | Open at login | Starts HocusFocus when you log in. |
 | Quit AutoRaise | Shown only when AutoRaise is running: both tools react to the mouse. |
+| Check for Updates… | Opens the page of the latest release on GitHub. |
 
 The settings are saved in the `local.hocusfocus` defaults. To see each decision, turn on
 the log, then quit and reopen the app:
@@ -45,6 +80,25 @@ defaults write local.hocusfocus log -bool YES
 The log is `~/Library/Logs/HocusFocus.log`. `defaults delete local.hocusfocus log` turns it
 off.
 
+### Releases
+
+A version tag publishes a release: the Release workflow (`.github/workflows/release.yml`) builds
+HocusFocus for Apple silicon and Intel, signs it, makes `HocusFocus.dmg` and attaches it to a
+GitHub release, which the Download link above always points to.
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+- Releases are signed with a self-signed certificate, "HocusFocus Release Signing", kept in the
+  repository secrets `SIGNING_P12` and `SIGNING_P12_PASSWORD`. It isn't tied to an Apple
+  account, so macOS asks to Open Anyway the first time; but it stays the same from one version
+  to the next, so macOS keeps the Accessibility access after an update.
+- To make the disk image on your Mac: `pip3 install dmgbuild`, then
+  `UNIVERSAL=1 NO_INSTALL=1 ./build.sh` and
+  `NAME=HocusFocus COLORS="4B55E0 2E34A7 151859" tools/make-dmg.sh build/HocusFocus.app HocusFocus.dmg`.
+
 ## Source layout
 
 | Folder | Content |
@@ -53,6 +107,8 @@ off.
 | `Sources/App` | The menu bar app. |
 | `Sources/CLI` | The `hocusfocus` command line tool. |
 | `Resources/*.lproj` | Menu texts, English and French. |
+| `Icon` | The app icon, drawn in code (`make-icon.swift`, `make-icns.sh`). |
+| `tools` | The disk image: `make-dmg.sh`, its background and its settings. |
 
 ## The command line tool
 
