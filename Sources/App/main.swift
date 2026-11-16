@@ -30,6 +30,9 @@ enum Preferences {
         settings.exceptApps = Set(defaults.stringArray(forKey: "exceptApps") ?? [])
         settings.onlyApps = Set(defaults.stringArray(forKey: "onlyApps") ?? [])
         if defaults.object(forKey: "movePointer") != nil { settings.movePointer = defaults.bool(forKey: "movePointer") }
+        if defaults.object(forKey: "movePointerToNewWindows") != nil {
+            settings.movePointerToNewWindows = defaults.bool(forKey: "movePointerToNewWindows")
+        }
         return settings
     }
 
@@ -43,6 +46,7 @@ enum Preferences {
         defaults.set(settings.exceptApps.sorted(), forKey: "exceptApps")
         defaults.set(settings.onlyApps.sorted(), forKey: "onlyApps")
         defaults.set(settings.movePointer, forKey: "movePointer")
+        defaults.set(settings.movePointerToNewWindows, forKey: "movePointerToNewWindows")
     }
 
     /// `defaults write local.hocusfocus log -bool YES` writes each decision to
@@ -173,6 +177,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(item(localized("Move the pointer to the app you switch to"), #selector(toggleMovePointer),
                           checked: settings.movePointer))
+        menu.addItem(item(localized("Move the pointer to new windows"), #selector(toggleMovePointerToNewWindows),
+                          checked: settings.movePointerToNewWindows))
         menu.addItem(appsSubmenu())
 
         menu.addItem(.separator())
@@ -296,6 +302,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleMovePointer() {
         settings.movePointer.toggle()
+        apply()
+    }
+
+    @objc private func toggleMovePointerToNewWindows() {
+        settings.movePointerToNewWindows.toggle()
         apply()
     }
 

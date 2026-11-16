@@ -19,6 +19,8 @@ run options:
   --only <id,id>        Focus only these apps (bundle identifiers)
   --no-move-pointer     Leave the pointer where it is when an app becomes active from the
                         keyboard or the Dock (by default it goes to the app's window)
+  --no-new-windows      Leave the pointer where it is when an app opens a window that takes
+                        the focus (by default it goes to that window)
   --verbose             Log every decision
 """
 
@@ -137,6 +139,8 @@ case "run":
             settings.onlyApps = Set(value().split(separator: ",").map { String($0) })
         case "--no-move-pointer":
             settings.movePointer = false
+        case "--no-new-windows":
+            settings.movePointerToNewWindows = false
         case "--verbose":
             verbose = true
         default:
