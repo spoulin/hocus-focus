@@ -52,6 +52,12 @@ enum Preferences {
     /// `defaults write local.hocusfocus log -bool YES` writes each decision to
     /// ~/Library/Logs/HocusFocus.log.
     static var logEnabled: Bool { defaults.bool(forKey: "log") }
+
+    /// A ring around the pointer after HocusFocus moved it. On by default.
+    static var highlightPointer: Bool {
+        get { defaults.object(forKey: "highlightPointer") == nil || defaults.bool(forKey: "highlightPointer") }
+        set { defaults.set(newValue, forKey: "highlightPointer") }
+    }
 }
 
 /// Appends lines to ~/Library/Logs/HocusFocus.log.
@@ -80,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var permissionTimer: Timer?
     private var logFile: LogFile?
+    private lazy var highlight = PointerHighlight()
 
     private static let autoRaiseBundleID = "com.sbmpost.AutoRaise"
 
@@ -91,6 +98,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if Preferences.logEnabled {
             logFile = LogFile()
             watcher.log = { [weak self] line in self?.logFile?.write(line) }
+        }
+        watcher.pointerMoved = { [weak self] point in
+            if Preferences.highlightPointer { self?.highlight.show(at: point) }
         }
         updateIcon()
         startWhenTrusted(prompt: true)
@@ -179,6 +189,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                           checked: settings.movePointer))
         menu.addItem(item(localized("Move the pointer to new windows"), #selector(toggleMovePointerToNewWindows),
                           checked: settings.movePointerToNewWindows))
+        menu.addItem(item(localized("Show a ring where the pointer lands"), #selector(toggleHighlight),
+                          checked: Preferences.highlightPointer))
         menu.addItem(appsSubmenu())
 
         menu.addItem(.separator())
@@ -308,6 +320,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleMovePointerToNewWindows() {
         settings.movePointerToNewWindows.toggle()
         apply()
+    }
+
+    @objc private func toggleHighlight() {
+        Preferences.highlightPointer.toggle()
     }
 
     @objc private func chooseAppFilter(_ sender: NSMenuItem) {

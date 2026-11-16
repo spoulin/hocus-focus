@@ -62,6 +62,9 @@ public final class Watcher {
     public var settings: Settings
     /// Receives one line for each decision. Nil: no log.
     public var log: ((String) -> Void)?
+    /// Called after HocusFocus moved the pointer, with where it put it (global coordinates,
+    /// origin top left). The app draws a ring there, so the eye finds the pointer.
+    public var pointerMoved: ((CGPoint) -> Void)?
     public var isRunning: Bool { tap != nil }
 
     private var tap: CFMachPort?
@@ -305,6 +308,7 @@ public final class Watcher {
         // After a warp, macOS ignores the mouse for a quarter second unless told otherwise.
         CGAssociateMouseAndMouseCursorPosition(1)
         write("pointer moved to (\(Int(point.x)), \(Int(point.y))): \(window.description)")
+        pointerMoved?(point)
     }
 
     // MARK: Pointer on new windows
