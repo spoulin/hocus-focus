@@ -53,6 +53,42 @@ public enum Windows {
         }
     }
 
+    /// The app that owns what is under a point: a window, the Dock, Finder's desktop...
+    public static func pid(at point: CGPoint) -> pid_t? {
+        var raw: AXUIElement?
+        guard AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(point.y), &raw) == .success,
+              let element = raw else { return nil }
+        var pid: pid_t = 0
+        return AXUIElementGetPid(element, &pid) == .success ? pid : nil
+    }
+
+    /// The point of a window nearest its center that is on a display and that no window of a
+    /// normal app covers. Nil when the window is hidden. Overlays of background apps (the Dock,
+    /// JankyBorders) let the mouse through, so they don't count.
+    public static func visiblePoint(of window: WindowInfo, in windows: [WindowInfo] = onScreen()) -> CGPoint? {
+        guard let index = windows.firstIndex(where: { $0.id == window.id }) else { return nil }
+        let cursorLevel = Int(CGWindowLevelForKey(.cursorWindow))
+        let covers = windows[..<index].filter {
+            $0.layer < cursorLevel && !$0.isTiny
+                && NSRunningApplication(processIdentifier: $0.pid)?.activationPolicy == .regular
+        }.map(\.bounds)
+        let b = window.bounds, center = CGPoint(x: b.midX, y: b.midY)
+        let steps = 8
+        var candidates: [CGPoint] = []
+        for i in 1..<steps {
+            for j in 1..<steps {
+                candidates.append(CGPoint(x: b.minX + b.width * CGFloat(i) / CGFloat(steps),
+                                          y: b.minY + b.height * CGFloat(j) / CGFloat(steps)))
+            }
+        }
+        candidates.sort { hypot($0.x - center.x, $0.y - center.y) < hypot($1.x - center.x, $1.y - center.y) }
+        return candidates.first { point in
+            var displays: UInt32 = 0
+            CGGetDisplaysWithPoint(point, 0, nil, &displays)
+            return displays > 0 && !covers.contains { $0.contains(point) }
+        }
+    }
+
     public enum Hit {
         /// The Accessibility element is nil when the app does not expose that window.
         case window(WindowInfo, AXUIElement?)

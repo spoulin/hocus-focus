@@ -29,6 +29,7 @@ enum Preferences {
         }
         settings.exceptApps = Set(defaults.stringArray(forKey: "exceptApps") ?? [])
         settings.onlyApps = Set(defaults.stringArray(forKey: "onlyApps") ?? [])
+        if defaults.object(forKey: "movePointer") != nil { settings.movePointer = defaults.bool(forKey: "movePointer") }
         return settings
     }
 
@@ -41,6 +42,7 @@ enum Preferences {
         defaults.set(settings.appFilter.rawValue, forKey: "appFilter")
         defaults.set(settings.exceptApps.sorted(), forKey: "exceptApps")
         defaults.set(settings.onlyApps.sorted(), forKey: "onlyApps")
+        defaults.set(settings.movePointer, forKey: "movePointer")
     }
 
     /// `defaults write local.hocusfocus log -bool YES` writes each decision to
@@ -169,6 +171,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             choice(title, #selector(chooseDisableKey(_:)), key.rawValue, checked: settings.disableKey == key)
         }))
 
+        menu.addItem(item(localized("Move the pointer to the app you switch to"), #selector(toggleMovePointer),
+                          checked: settings.movePointer))
         menu.addItem(appsSubmenu())
 
         menu.addItem(.separator())
@@ -288,6 +292,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             settings.disableKey = key
             apply()
         }
+    }
+
+    @objc private func toggleMovePointer() {
+        settings.movePointer.toggle()
+        apply()
     }
 
     @objc private func chooseAppFilter(_ sender: NSMenuItem) {

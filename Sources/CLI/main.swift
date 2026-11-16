@@ -17,6 +17,8 @@ run options:
   --disable-key control|option|command|none   Hold to pause (default control)
   --except <id,id>      Never focus these apps (bundle identifiers)
   --only <id,id>        Focus only these apps (bundle identifiers)
+  --no-move-pointer     Leave the pointer where it is when an app becomes active from the
+                        keyboard or the Dock (by default it goes to the app's window)
   --verbose             Log every decision
 """
 
@@ -133,6 +135,8 @@ case "run":
         case "--only":
             settings.appFilter = .only
             settings.onlyApps = Set(value().split(separator: ",").map { String($0) })
+        case "--no-move-pointer":
+            settings.movePointer = false
         case "--verbose":
             verbose = true
         default:
