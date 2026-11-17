@@ -80,6 +80,11 @@ public final class Watcher {
     private var workspaceObservers: [NSObjectProtocol] = []
     /// One Accessibility observer per app, told when the app shows a window.
     private var windowObservers: [pid_t: AXObserver] = [:]
+    /// Windows that just appeared, and when. While one of them has the focus, resting the mouse
+    /// on another window doesn't take the focus away from it: the pointer often crosses other
+    /// windows on its way to a settings window that just opened.
+    private var openedWindows: [CGWindowID: Date] = [:]
+    private static let newWindowGrace: TimeInterval = 1.5
     private var pointerMove: DispatchWorkItem?
 
     public init(settings: Settings) {
@@ -178,6 +183,10 @@ public final class Watcher {
         if Date().timeIntervalSince(lastKeyDown) < settings.typingGuard { return write("skip: typing") }
 
         let current = Windows.focused()
+        if let current, let opened = openedWindows[current.id],
+           Date().timeIntervalSince(opened) < Self.newWindowGrace {
+            return write("skip: window #\(current.id) just opened")
+        }
         let windows = Windows.onScreen()
 
         // The focused app shows a menu, popover, sheet, dialog or panel in front of its
@@ -338,9 +347,13 @@ public final class Watcher {
     ]
 
     fileprivate func windowCreated(_ element: AXUIElement) {
-        guard settings.enabled, settings.movePointerToNewWindows,
+        guard settings.enabled,
               Self.newWindowSubroles.contains(Windows.string(element, kAXSubroleAttribute) ?? ""),
               let id = Private.windowID(of: element) else { return }
+        let now = Date()
+        openedWindows = openedWindows.filter { now.timeIntervalSince($0.value) < Self.newWindowGrace }
+        openedWindows[id] = now
+        guard settings.movePointerToNewWindows else { return }
         var pid: pid_t = 0
         AXUIElementGetPid(element, &pid)
         checkNewWindow(id, pid: pid, attempt: 0)
