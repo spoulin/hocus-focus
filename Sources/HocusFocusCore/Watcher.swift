@@ -75,6 +75,9 @@ public final class Watcher {
     private var flags: CGEventFlags = []
     private var lastMouseDown = (date: Date.distantPast, point: CGPoint.zero)
     private var lastMouseMove = Date.distantPast
+    /// The app in front at the last key or click, and when: a window it opens soon after
+    /// (its settings after ⌘,) answers that key or click.
+    private var lastInput = (pid: pid_t(0), date: Date.distantPast)
     /// The app HocusFocus itself just focused: its activation must not move the pointer.
     private var ownActivation = (pid: pid_t(0), date: Date.distantPast)
     private var workspaceObservers: [NSObjectProtocol] = []
@@ -152,11 +155,13 @@ public final class Watcher {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
         case .keyDown:
             lastKeyDown = Date()
+            lastInput = (Private.frontmostPID() ?? 0, lastKeyDown)
         case .flagsChanged:
             flags = event.flags
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
             buttonsDown += 1
             lastMouseDown = (Date(), event.location)
+            lastInput = (Private.frontmostPID() ?? 0, lastMouseDown.date)
             dwellTimer?.cancel()
         case .leftMouseUp, .rightMouseUp, .otherMouseUp:
             buttonsDown = max(0, buttonsDown - 1)
@@ -353,30 +358,52 @@ public final class Watcher {
         let now = Date()
         openedWindows = openedWindows.filter { now.timeIntervalSince($0.value) < Self.newWindowGrace }
         openedWindows[id] = now
-        guard settings.movePointerToNewWindows else { return }
         var pid: pid_t = 0
         AXUIElementGetPid(element, &pid)
-        checkNewWindow(id, pid: pid, attempt: 0)
+        checkNewWindow(id, element: element, pid: pid, opened: now, attempt: 0)
     }
 
-    /// Only a window that takes the focus, in the active app, gets the pointer: windows that
-    /// open in the background, or that a click is already on, are left alone.
-    private func checkNewWindow(_ id: CGWindowID, pid: pid_t, attempt: Int) {
+    /// A window that takes the focus in the active app comes to the front and gets the pointer.
+    /// A window that opens a moment after a key or click in its app (settings after ⌘,) gets
+    /// the focus back when HocusFocus gave it to another window in between: the mouse rested
+    /// there while the app was still opening the window. Windows that open in the background,
+    /// or that a click is already on, are left alone.
+    private func checkNewWindow(_ id: CGWindowID, element: AXUIElement, pid: pid_t, opened: Date, attempt: Int) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
             guard let self else { return }
-            guard Windows.focused()?.id == id else {
-                if attempt < 3 { checkNewWindow(id, pid: pid, attempt: attempt + 1) }
-                return
-            }
             let app = NSRunningApplication(processIdentifier: pid)
             let name = app?.localizedName ?? "pid \(pid)"
-            if let key = settings.disableKey.flags, flags.contains(key) { return write("pointer: new window of \(name), disable key held") }
-            guard settings.allows(app?.bundleIdentifier) else { return write("pointer: new window of \(name), filtered out") }
-            guard buttonsDown == 0 else { return write("pointer: new window of \(name), mouse button down") }
-            let windows = Windows.onScreen()
-            guard let window = windows.first(where: { $0.id == id && $0.layer == 0 && !$0.isTiny }) else { return }
-            write("new window: \(window.description)")
-            putPointer(on: window, in: windows)
+            let current = Windows.focused()
+            if current?.id != id {
+                // HocusFocus moved the focus away from the app after the key or click that opened the window.
+                let answersInput = lastInput.pid == pid && opened.timeIntervalSince(lastInput.date) < 3
+                if answersInput, ownActivation.pid != pid, ownActivation.date > lastInput.date, buttonsDown == 0 {
+                    ownActivation = (pid, Date())
+                    let done = settings.mode == .focus && Private.focusWithoutRaiseAvailable
+                        ? Focus.withoutRaise(target: id, current: current?.id)
+                        : Focus.raise(element, pid: pid)
+                    write("new window takes the focus back \(done ? "ok" : "FAILED"): \(name) #\(id)")
+                    guard done else { return }
+                } else {
+                    if attempt < 3 { checkNewWindow(id, element: element, pid: pid, opened: opened, attempt: attempt + 1) }
+                    return
+                }
+            }
+            // An app focused without raising opens its new windows above its own windows only,
+            // so one can open behind the window in front. The app is active: the raise works.
+            AXUIElementPerformAction(element, kAXRaiseAction as CFString)
+            guard settings.movePointerToNewWindows else { return }
+            // The window list shows the new order a moment after the raise.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                guard let self else { return }
+                if let key = settings.disableKey.flags, flags.contains(key) { return write("pointer: new window of \(name), disable key held") }
+                guard settings.allows(app?.bundleIdentifier) else { return write("pointer: new window of \(name), filtered out") }
+                guard buttonsDown == 0 else { return write("pointer: new window of \(name), mouse button down") }
+                let windows = Windows.onScreen()
+                guard let window = windows.first(where: { $0.id == id && $0.layer == 0 && !$0.isTiny }) else { return }
+                write("new window: \(window.description)")
+                putPointer(on: window, in: windows)
+            }
         }
     }
 
